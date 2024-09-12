@@ -8,6 +8,6 @@ Here’s what’s known so far:
     There’s something connected to GPIO 35, but it will be determined later,
     GPIO 16 and 17 are used for TTL communication.
 
-Additionally, a custom driver for the CMS79FT738 display has been fully implemented, with complete support for all buttons and icons.
+Additionally, a custom driver for the CMS79FT738 display has been fully implemented, with complete support for all buttons and icons. Theoretically, this firmware could also be compatible with other heaters that use ESP32, as the communication protocol should be the same.
 
 There are probably other things I’ve overlooked. I wrote this because I’m frustrated with the official Norwegian firmware for Mill heaters. Fuck closed-source software!
