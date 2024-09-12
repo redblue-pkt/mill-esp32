@@ -1,0 +1,522 @@
+globals:
+  - id: target_value
+    type: float
+    restore_value: yes
+    initial_value: '5'
+
+  - id: current_value
+    type: float
+    restore_value: no
+    initial_value: '5'
+
+  - id: status_value
+    type: bool
+    restore_value: yes
+    initial_value: 'true'
+
+  - id: wifi_value
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+
+  - id: heating_value
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# energy meter
+  - id: heater_power
+    type: int
+    restore_value: yes
+    initial_value: '250'
+  - id: energy_total
+    type: float
+    restore_value: yes
+    initial_value: '0'
+  - id: energy_today
+    type: float
+    restore_value: true
+    initial_value: '0'
+  - id: energy_month
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: energy_year
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: last_reset_day
+    type: time_t
+    restore_value: true
+    initial_value: '0'
+  - id: last_reset_month
+    type: time_t
+    restore_value: true
+    initial_value: '0'
+  - id: last_reset_year
+    type: time_t
+    restore_value: true
+    initial_value: '0'
+
+substitutions:
+  # Project Specific Substitutions
+  sub_text_devicename:            "Mill Esp32"
+  sub_esphome_name:               "mill_esp32"
+  sub_device_location:            "esp32"
+  # sub_wifi_manual_ip_static_ip:   !secret esp_fridge_monitor_ip
+  sub_ntp_server:                 "no.pool.ntp.org"
+  sub_timezone:                   "Oslo"
+  # Network and service related substitutions
+  sub_wifi_ssid:                  !secret esp_wifi_ssid
+  sub_wifi_password:              !secret esp_wifi_pass
+  # sub_wifi_manual_ip_gateway:     !secret esp_ip_gateway
+  # sub_wifi_manual_ip_dns1:        !secret esp_ip_dns
+  # Fast connect is only available when a single SSID is used.  True or False
+  sub_wifi_fast_connect:          "true"                  
+  sub_wifi_domain:                !secret esp_ip_domain
+  sub_wifi_ap_password:           !secret esp_ap_psk
+  sub_web_server_port:            !secret esp_http_server_port
+  sub_web_server_auth_user:       !secret esp_http_user
+  sub_web_server_auth_password:   !secret esp_http_pass
+  sub_api_password:               !secret esp_api_pass
+  sub_ota_password:               !secret esp_ota_pass
+
+esphome:
+  name:                           ${sub_esphome_name}
+  
+  # After the device is all up and running, run this script to set 
+  # options or conditions that are needed.  This is not always necessary
+  # https://esphome.io/components/esphome.html#on-boot
+  #on_boot:                          
+  #  priority:                     -100
+  #  then:
+  #    script.execute:             on_boot
+
+  # Mill header
+  includes:
+    - cms79ft738.cpp
+    - cms79ft738.h
+    - cms79ft738_led.cpp
+    - cms79ft738_led.h
+    - cms79ft738_key.cpp
+    - cms79ft738_key.h
+    - cms79ft738_mill.h
+
+esp32:
+  board: nodemcu-32s
+  framework:
+    type: arduino
+
+time:
+  - platform: sntp
+    id: ntp_time
+    servers: "${sub_ntp_server}"
+    timezone: "Europe/Oslo"
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
+        - logger.log: 
+            format: "Boot time %02d:%02d:%02d"
+            args: [ id(ntp_time).now().hour, id(ntp_time).now().minute, id(ntp_time).now().second ]
+    on_time:
+      - seconds: 0
+        minutes: /1
+        then:
+          - logger.log: 
+              format: "Current time %02d:%02d:%02d"
+              args: [ id(ntp_time).now().hour, id(ntp_time).now().minute, id(ntp_time).now().second ]
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 9600 # 9600
+  #debug:
+  #  direction: BOTH
+  #  after:
+  #      timeout: 50ms
+  #  sequence:
+
+i2c:
+  sda: GPIO19
+  scl: GPIO18
+  scan: true
+  frequency: 200kHz
+
+climate:
+- platform: custom
+  id: ${sub_esphome_name}_climate
+  lambda: |-
+    auto cms79ft738 = new Cms79ft738LedMill();
+    App.register_component(cms79ft738);
+    return {cms79ft738};
+  climates:
+    - name: ${sub_esphome_name}
+      id: ${sub_esphome_name}_heater
+      visual:
+         min_temperature: 5 °C
+         max_temperature: 35 °C
+         temperature_step: 1.0 °C
+
+wifi:
+  networks:
+    - ssid:                      ${sub_wifi_ssid}
+      password:                  ${sub_wifi_password}
+
+  # To use DHCP comment out the manual_ip block and contents
+  # manual_ip:
+  #  static_ip:                  ${sub_wifi_manual_ip_static_ip}
+  #  subnet:                     ${sub_wifi_manual_ip_subnet}
+  #  gateway:                    ${sub_wifi_manual_ip_gateway}
+  #  dns1:                       ${sub_wifi_manual_ip_dns1}
+  # If you are using only one SSID, enable Fast Connect
+  fast_connect:                 ${sub_wifi_fast_connect}
+  domain:                       ${sub_wifi_domain}
+  reboot_timeout:               0s
+  output_power:                 20.0dB
+  power_save_mode:              none
+  ap:                           # Enable fallback hotspot
+    ssid:                       ${sub_text_devicename} Hotspot
+    password:                   ${sub_wifi_ap_password}
+
+web_server: 
+  port: ${sub_web_server_port}
+  log: true
+  version: 3
+  ota: true
+  local: true
+
+captive_portal:
+
+api:
+  password:                   ${sub_api_password}
+  reboot_timeout:             0s
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+ota:
+  platform:                   esphome
+  password:                   ${sub_ota_password}
+
+script:
+  - id: on_boot
+    then:
+      - logger.log:           "System post-boot setup underway..."
+      - logger.log:           "System post-boot setup complete..."
+
+sensor:
+  - platform: template
+    name: ${sub_text_devicename} Free Heap Size
+    id: ${sub_esphome_name}_free_heap_size
+    lambda: |-
+      return (float)ESP.getFreeHeap() / 1024.0;
+    unit_of_measurement: "KB"
+    update_interval: 30s 
+
+  - platform: template
+    name: ${sub_text_devicename} CPU Frequency
+    id: ${sub_esphome_name}_cpu_frequency
+    lambda: |-
+      return (float)ESP.getCpuFreqMHz();
+    unit_of_measurement: "MHz"
+
+  - platform: template
+    name: ${sub_text_devicename} Flash Chip Size
+    id: ${sub_esphome_name}_flash_chip_size
+    lambda: |-
+      return (float)ESP.getFlashChipSize() / (1024.0 * 1024.0);
+    unit_of_measurement: "MB"
+
+  - platform: wifi_signal
+    name: ${sub_text_devicename} WiFi Signal
+    id: ${sub_esphome_name}_wifi_signal
+    update_interval: 30s
+    internal: true
+
+  - platform: template
+    id: ${sub_esphome_name}_wifi_signal_percentage
+    name: ${sub_text_devicename} Wi-Fi signal percentage
+    icon: "mdi:wifi"
+    unit_of_measurement: "%"
+    update_interval: 30s
+    lambda: |-
+      if (id(${sub_esphome_name}_wifi_signal).state) {
+        if (id(${sub_esphome_name}_wifi_signal).state <= -100 ) {
+          return 0;
+        } else if (id(${sub_esphome_name}_wifi_signal).state >= -50) {
+          return 100;
+        } else {
+          return 2 * (id(${sub_esphome_name}_wifi_signal).state + 100);
+        }
+      } else {
+        return NAN;
+      }
+
+  - platform: template
+    name: ${sub_text_devicename} Wi-Fi Channel
+    id: ${sub_esphome_name}_wifi_channel
+    lambda: return WiFi.channel();
+    update_interval: 30s  
+
+  - platform: uptime
+    name: ${sub_text_devicename} Uptime in Days
+    id: ${sub_esphome_name}_uptime_sensor_days
+    internal: true
+    update_interval: 60s
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id:               ${sub_esphome_name}_uptime
+            state: !lambda |-
+                              int seconds = round(id(${sub_esphome_name}_uptime_sensor_days).raw_state);
+                              int days = seconds / (24 * 3600);
+                              seconds = seconds % (24 * 3600);
+                              int hours = seconds / 3600;
+                              seconds = seconds % 3600;
+                              int minutes = seconds / 60;
+                              seconds = seconds % 60;
+                              return (
+                                (days ? String(days) + "d " : "") +
+                                (hours ? String(hours) + "h " : "") +
+                                (minutes ? String(minutes) + "m " : "") +
+                                (String(seconds) + "s")
+                              ).c_str();
+
+    # Include mill heater target temperature in the device attributes
+  - platform: template
+    name: ${sub_text_devicename} Target Temperature
+    id: wanted_temperature
+    unit_of_measurement: °C
+    accuracy_decimals: 1
+    device_class: temperature
+
+    # Include mill heater current temperature in the device attributes
+  - platform: template
+    name: ${sub_text_devicename} Current Temperature
+    id: now_temperature
+    unit_of_measurement: °C
+    accuracy_decimals: 1
+    device_class: temperature
+
+  - platform: template
+    name: ${sub_text_devicename} Energy Current
+    id: ${sub_esphome_name}_power_sensor
+    unit_of_measurement: A
+    device_class: "energy"
+    icon: "mdi:lightning-bolt"
+    accuracy_decimals: 3
+    lambda: |-
+      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
+        return id(heater_power) / 230.0;
+      } else {
+        return 0.0;
+      }
+    update_interval: 10s
+
+  - platform: template
+    name: "${sub_text_devicename} Energy Daily"
+    id: ${sub_esphome_name}_energy_daily
+    unit_of_measurement: kWh
+    device_class: energy
+    icon: mdi:calendar-today
+    accuracy_decimals: 3
+    lambda: |-
+      time_t now = id(ntp_time).now().timestamp;
+      struct tm timeinfo;
+      localtime_r(&now, &timeinfo);
+
+      // Reset dzienny
+      if (timeinfo.tm_mday != localtime_r(&id(last_reset_day), &timeinfo)->tm_mday) {
+        id(energy_today) = 0.0;
+        id(last_reset_day) = now;
+      }
+
+      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
+        id(energy_today) += id(heater_power) / 1000 * 0.000277778;
+      }
+
+      return id(energy_today);
+    update_interval: 10s
+    
+  - platform: template
+    name: "${sub_text_devicename} Energy Monthly"
+    id: ${sub_esphome_name}_energy_monthly
+    unit_of_measurement: kWh
+    device_class: energy
+    icon: mdi:calendar-month
+    accuracy_decimals: 3
+    lambda: |-
+      time_t now = id(ntp_time).now().timestamp;
+      struct tm timeinfo;
+      localtime_r(&now, &timeinfo);
+
+      // Reset miesięczny
+      if (timeinfo.tm_mon != localtime_r(&id(last_reset_month), &timeinfo)->tm_mon) {
+        id(energy_month) = 0.0;
+        id(last_reset_month) = now;
+      }
+
+      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
+        id(energy_month) += id(heater_power) / 1000 * 0.000277778;
+      }
+
+      return id(energy_month);
+    update_interval: 10s
+
+  - platform: template
+    name: "${sub_text_devicename} Energy Yearly"
+    id: ${sub_esphome_name}_energy_yearly
+    unit_of_measurement: kWh
+    device_class: energy
+    icon: mdi:calendar-range
+    accuracy_decimals: 3
+    lambda: |-
+      time_t now = id(ntp_time).now().timestamp;
+      struct tm timeinfo;
+      localtime_r(&now, &timeinfo);
+
+      // Reset roczny
+      if (timeinfo.tm_year != localtime_r(&id(last_reset_year), &timeinfo)->tm_year) {
+        id(energy_year) = 0.0;
+        id(last_reset_year) = now;
+      }
+
+      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
+        id(energy_year) += id(heater_power) / 1000 * 0.000277778;
+      }
+
+      return id(energy_year);
+    update_interval: 10s
+
+  - platform: template
+    name: ${sub_text_devicename} Energy Total
+    id: ${sub_esphome_name}_energy_total
+    unit_of_measurement: kWh
+    device_class: "energy"
+    icon: "mdi:lightning-bolt"
+    accuracy_decimals: 3
+    lambda: |-
+      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
+        id(energy_total) += id(heater_power) / 1000 * 0.000277778;
+      }
+      return id(energy_total);
+    update_interval: 10s
+
+  - platform: adc
+    pin: GPIO34
+    name: ${sub_text_devicename} NTC Voltage
+    id: ${sub_esphome_name}_adc_sensor
+    update_interval: 10s
+    attenuation: 12db
+    #filters:
+    #  - multiply: 3.3
+    filters:
+      - multiply:  0.97
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 5
+
+  - platform: resistance
+    sensor: ${sub_esphome_name}_adc_sensor
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    name: ${sub_text_devicename} NTC Resistance
+    id: ${sub_esphome_name}_resistance_sensor
+
+  - platform: ntc
+    sensor: ${sub_esphome_name}_resistance_sensor
+    id: ${sub_esphome_name}_temperature_ntc
+    name: ${sub_text_devicename} NTC Temperature
+    calibration:
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+      b_constant: 3950
+    unit_of_measurement: "°C"
+    on_value:
+      then:
+        - lambda: |-
+            id(current_value) = id(${sub_esphome_name}_temperature_ntc).state;
+            auto cms_device = new Cms79ft738LedMill();
+            cms_device->blit();
+            //cms_device->set_current_temperature(id(temperature_ntc).state);
+            //cms_device->set_target_temperature(id(target_value));
+
+switch:
+  - platform:                 gpio
+    pin:                      GPIO4
+    inverted: true
+    name:                     ${sub_text_devicename} Heat
+    id:                       global_mill_heat
+    restore_mode:             RESTORE_DEFAULT_OFF
+    icon:                     mdi:power
+
+button:
+  - platform: restart
+    name: ${sub_text_devicename} Restart
+    id: global_reset_device
+    icon: mdi:power
+
+  - platform: factory_reset
+    name: ${sub_text_devicename} Factory Settings
+    id: global_factory_settings
+    icon: mdi:restore
+
+text_sensor:
+  - platform: version                   
+    name: ${sub_text_devicename} ESPHome version
+    id: ${sub_esphome_name}_esphome_version
+    icon: mdi:code-greater-than
+
+  - platform: wifi_info
+    ip_address:
+      name: ${sub_text_devicename} IP address
+      id: ${sub_esphome_name}_host_ip
+      icon: mdi:fingerprint
+      update_interval: 3600s  
+    ssid:
+      name: ${sub_text_devicename} Connected SSID
+      id: ${sub_esphome_name}_host_ssid
+      icon: mdi:router-wireless
+      update_interval: 3600s 
+      
+  - platform: template                   
+    id: ${sub_esphome_name}_host_mac
+    name: ${sub_text_devicename} MAC address
+    icon: mdi:fingerprint
+    lambda: 'return {WiFi.macAddress().c_str()};'
+    
+  - platform: template
+    name: ${sub_text_devicename} Uptime
+    id: ${sub_esphome_name}_uptime
+    icon: mdi:clock-start
+    update_interval: 3600s  
+  - platform: template
+    name: ${sub_text_devicename} Heater Status
+    id: heater_status
+    icon: mdi:text-box
+
+binary_sensor:
+  - platform:                 status                   
+    id:                       ${sub_esphome_name}_device_status
+    name:                     ${sub_text_devicename} Device Status
+
+number:
+  - platform: template
+    name: ${sub_text_devicename} Heater Power
+    id: ${sub_esphome_name}_heater_power
+    optimistic: true
+    min_value: 250
+    max_value: 2800
+    step: 50
+    initial_value: 250
+    restore_value: yes
+    unit_of_measurement: "W"
+    set_action:
+      then:
+        - lambda: |-
+            int value = x;
+            id(heater_power) = value;
+            ESP_LOGD("Heater Power", "Heater power set to %d", value);
+            id(${sub_esphome_name}_heater_power).publish_state(value);
