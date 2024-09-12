@@ -1,4 +1,4 @@
-This project is an alternative firmware for a Mill 400W heater in Norway, based on ESPHome. The heater works with Home Assistant. There's still work to be done, particularly with the behavior of the settings button, and I'm unsure if the temperature measurements are accurate.
+This project is an alternative firmware for a Mill WiFi Generation Heater 3, specifically for a Mill 400W heater in Norway, based on ESPHome. The heater works with Home Assistant. There's still work to be done, particularly with the behavior of the settings button, and I'm unsure if the temperature measurements are accurate.
 
 Here’s what’s known so far:
 
