@@ -37,6 +37,10 @@ globals:
     type: float
     restore_value: true
     initial_value: '0'
+  - id: energy_yesterday
+    type: float
+    restore_value: true
+    initial_value: '0.0'
   - id: energy_month
     type: float
     restore_value: true
@@ -83,6 +87,8 @@ substitutions:
 
 esphome:
   name:                           ${sub_esphome_name}
+  platformio_options:
+    board_build.flash_mode: qio
   
   # After the device is all up and running, run this script to set 
   # options or conditions that are needed.  This is not always necessary
@@ -125,6 +131,37 @@ time:
           - logger.log: 
               format: "Current time %02d:%02d:%02d"
               args: [ id(ntp_time).now().hour, id(ntp_time).now().minute, id(ntp_time).now().second ]
+
+      - seconds: 0
+        minutes: 0
+        hours: 0
+        days_of_month: "*"
+        months: "*"
+        then:
+          - lambda: |-
+              id(energy_yesterday) = id(energy_today);
+              id(energy_today) = 0.0;
+              ESP_LOGI("reset", "Daily energy reset performed. Energy Yesterday: %f kWh", id(energy_yesterday));
+
+      - seconds: 0
+        minutes: 0
+        hours: 0
+        days_of_month: 1
+        months: "*"
+        then:
+          - lambda: |-
+              id(energy_month) = 0.0;
+              ESP_LOGI("reset", "Monthly energy reset performed.");
+
+      - seconds: 0
+        minutes: 0
+        hours: 0
+        days_of_month: 1
+        months: 1
+        then:
+          - lambda: |-
+              id(energy_year) = 0.0;
+              ESP_LOGI("reset", "Yearly energy reset performed.");
 
 uart:
   id: uart_bus
@@ -316,30 +353,33 @@ sensor:
     update_interval: 10s
 
   - platform: template
-    name: "${sub_text_devicename} Energy Daily"
-    id: ${sub_esphome_name}_energy_daily
+    name: "${sub_text_devicename} Energy Today"
+    id: ${sub_esphome_name}_energy_today
     unit_of_measurement: kWh
     device_class: energy
     icon: mdi:calendar-today
     accuracy_decimals: 3
     lambda: |-
-      time_t now = id(ntp_time).now().timestamp;
-      struct tm timeinfo;
-      localtime_r(&now, &timeinfo);
-
-      // Reset dzienny
-      if (timeinfo.tm_mday != localtime_r(&id(last_reset_day), &timeinfo)->tm_mday) {
-        id(energy_today) = 0.0;
-        id(last_reset_day) = now;
-      }
 
       if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
-        id(energy_today) += id(heater_power) / 1000 * 0.000277778;
+        float local_heater_power = id(heater_power);
+        float power_increment = local_heater_power / 1000 * 0.000277778;  // Przeliczanie mocy na kWh
+        id(energy_today) += power_increment;
       }
-
+        
       return id(energy_today);
     update_interval: 10s
-    
+
+  - platform: template
+    name: "${sub_text_devicename} Energy Yesterday"
+    id: ${sub_esphome_name}_energy_yesterday
+    unit_of_measurement: kWh
+    device_class: energy
+    icon: mdi:calendar-yesterday
+    accuracy_decimals: 3
+    lambda: |-
+      return id(energy_yesterday);
+
   - platform: template
     name: "${sub_text_devicename} Energy Monthly"
     id: ${sub_esphome_name}_energy_monthly
@@ -348,20 +388,13 @@ sensor:
     icon: mdi:calendar-month
     accuracy_decimals: 3
     lambda: |-
-      time_t now = id(ntp_time).now().timestamp;
-      struct tm timeinfo;
-      localtime_r(&now, &timeinfo);
-
-      // Reset miesięczny
-      if (timeinfo.tm_mon != localtime_r(&id(last_reset_month), &timeinfo)->tm_mon) {
-        id(energy_month) = 0.0;
-        id(last_reset_month) = now;
-      }
 
       if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
-        id(energy_month) += id(heater_power) / 1000 * 0.000277778;
+        float local_heater_power = id(heater_power);
+        float power_increment = local_heater_power / 1000 * 0.000277778;
+        id(energy_month) += power_increment;
       }
-
+        
       return id(energy_month);
     update_interval: 10s
 
@@ -373,18 +406,11 @@ sensor:
     icon: mdi:calendar-range
     accuracy_decimals: 3
     lambda: |-
-      time_t now = id(ntp_time).now().timestamp;
-      struct tm timeinfo;
-      localtime_r(&now, &timeinfo);
-
-      // Reset roczny
-      if (timeinfo.tm_year != localtime_r(&id(last_reset_year), &timeinfo)->tm_year) {
-        id(energy_year) = 0.0;
-        id(last_reset_year) = now;
-      }
 
       if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
-        id(energy_year) += id(heater_power) / 1000 * 0.000277778;
+        float local_heater_power = id(heater_power);
+        float power_increment = local_heater_power / 1000 * 0.000277778;
+        id(energy_year) += power_increment;
       }
 
       return id(energy_year);
@@ -398,9 +424,13 @@ sensor:
     icon: "mdi:lightning-bolt"
     accuracy_decimals: 3
     lambda: |-
+
       if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
-        id(energy_total) += id(heater_power) / 1000 * 0.000277778;
+        float local_heater_power = id(heater_power);
+        float power_increment = local_heater_power / 1000 * 0.000277778;
+        id(energy_total) += power_increment;
       }
+        
       return id(energy_total);
     update_interval: 10s
 
@@ -442,6 +472,21 @@ sensor:
             cms_device->blit();
             //cms_device->set_current_temperature(id(temperature_ntc).state);
             //cms_device->set_target_temperature(id(target_value));
+
+  - platform: adc
+    pin: GPIO35
+    name: "Voltage AC"
+    update_interval: 5s
+    accuracy_decimals: 0
+    filters:
+      - multiply: 220  
+      - lambda: |-
+          if (x >= 210 && x <= 270) {
+            return x;  
+          } else {
+            return {};  
+          }
+
 
 switch:
   - platform:                 gpio
