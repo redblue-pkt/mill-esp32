@@ -12,26 +12,23 @@ CONF_HEAT_SWITCH = "heat_switch"
 CONF_STATUS_TEXT = "status_text"
 CONF_TARGET_TEMP_SENSOR = "target_temperature_sensor"
 CONF_CURRENT_TEMP_SENSOR = "current_temperature_sensor"
-# to del ?
 CONF_TGT_TEMP_GLOBAL = "target_temperature_global"
 CONF_CUR_TEMP_GLOBAL = "current_temperature_global"
 CONF_RESET_BUTTON   = "reset_button"
 CONF_FACTORY_BUTTON = "factory_button"
 CONF_STATUS_VALUE_GLOBAL = "status_value_global"
 
-#CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend({
 BASE_SCHEMA = climate.climate_schema(MillClimate)
 
 CONFIG_SCHEMA = (
     BASE_SCHEMA.extend({
     cv.GenerateID(): cv.declare_id(MillClimate),
-    cv.Required(CONF_SENSOR): cv.use_id(sensor.Sensor),              # aktualna temp (NTC)
-    cv.Required(CONF_HEAT_SWITCH): cv.use_id(switch.Switch),         # przekaźnik GPIO4
-    cv.Optional(CONF_STATUS_TEXT): cv.use_id(text_sensor.TextSensor),# opcjonalny text_sensor z HEAT/IDLE/OFF
-    cv.Optional(CONF_TARGET_TEMP_SENSOR): cv.use_id(sensor.Sensor),  # opcjonalny „wanted_temperature”
-    cv.Optional(CONF_CURRENT_TEMP_SENSOR): cv.use_id(sensor.Sensor), # opcjonalny „now_temperature”
+    cv.Required(CONF_SENSOR): cv.use_id(sensor.Sensor),
+    cv.Required(CONF_HEAT_SWITCH): cv.use_id(switch.Switch),
+    cv.Optional(CONF_STATUS_TEXT): cv.use_id(text_sensor.TextSensor),
+    cv.Optional(CONF_TARGET_TEMP_SENSOR): cv.use_id(sensor.Sensor),
+    cv.Optional(CONF_CURRENT_TEMP_SENSOR): cv.use_id(sensor.Sensor),
 
-    # to del ?
     cv.Optional(CONF_TGT_TEMP_GLOBAL): cv.use_id(globals.GlobalsComponent),
     cv.Optional(CONF_CUR_TEMP_GLOBAL): cv.use_id(globals.GlobalsComponent),
     cv.Optional(CONF_RESET_BUTTON): cv.use_id(button.Button),
@@ -41,7 +38,6 @@ CONFIG_SCHEMA = (
     .extend(cv.polling_component_schema("50ms"))
     .extend(i2c.i2c_device_schema(0x50))
 )
-#}).extend(cv.polling_component_schema("1s")).extend(i2c.i2c_device_schema(0x50))
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
@@ -65,7 +61,6 @@ async def to_code(config):
         cts = await cg.get_variable(config[CONF_CURRENT_TEMP_SENSOR])
         cg.add(var.set_current_temperature_sensor(cts))
 
-    # to del ?
     if CONF_TGT_TEMP_GLOBAL in config:
         tg = await cg.get_variable(config[CONF_TGT_TEMP_GLOBAL])
         cg.add(var.set_target_temp_global(tg))
