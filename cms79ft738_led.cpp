@@ -21,7 +21,7 @@
 #include "cms79ft738_led.h"
 
 static const char *const log_tag = "cms79ft738_led"; // prefix for log messages
-                   /*   0     1     2     3     4     5     6     7     8     9    10    11    12 */
+                          /*   0     1     2     3     4     5     6     7     8     9    10    11    12 */
 static char baseArray[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 Cms79ft738_Led::Cms79ft738_Led()
@@ -192,7 +192,23 @@ void Cms79ft738_Led::setIconPower(bool power) {
 }
 
 void Cms79ft738_Led::setIconWifiGreen(bool wifi_green) {
+	wifi_yellow_icon = false;
+	wifi_red_icon = false;
 	wifi_green_icon = wifi_green;
+	setIcon();
+}
+
+void Cms79ft738_Led::setIconWifiRed(bool wifi_red) {
+	wifi_yellow_icon = false;
+	wifi_red_icon = wifi_red;
+	wifi_green_icon = false;
+	setIcon();
+}
+
+void Cms79ft738_Led::setIconWifiYellow(bool wifi_yellow) {
+	wifi_yellow_icon = wifi_yellow;
+	wifi_red_icon = wifi_yellow;
+	wifi_green_icon = wifi_yellow;
 	setIcon();
 }
 
@@ -227,6 +243,10 @@ bool Cms79ft738_Led::getIconWifiGreen() {
 
 bool Cms79ft738_Led::getIconWifiRed() {
 	return wifi_red_icon;
+}
+
+bool Cms79ft738_Led::getIconWifiYellow() {
+	return wifi_yellow_icon;
 }
 
 void Cms79ft738_Led::setLines(char lines)
@@ -293,12 +313,16 @@ char Cms79ft738_Led::setDigitTranslationLayer(int digit) {
 	return response;
 }
 
-void Cms79ft738_Led::setTemperature(float temperature)
+void Cms79ft738_Led::setTemperature(float temperature, bool fahrenheit)
 {
 	/* ab.c */
 	int a, b, c, d, e;
 
-	float temp = (float) temperature;
+	float temp;
+	if (fahrenheit)
+		temp = (float) temperature  * 1.8f + 32.0f;
+	else
+		temp = (float) temperature;
 
 	a = temp * 10;
 	b = a / 100 % 10;
@@ -377,3 +401,11 @@ void Cms79ft738_Led::setCDisplay()
 	setDigit2(setCharTranslationLayer(secondChar));
 }
 
+void Cms79ft738_Led::setAPisplay()
+{
+	char firstChar = 'A';
+	char secondChar = 'P';
+
+	setDigit1(setCharTranslationLayer(firstChar));
+	setDigit2(setCharTranslationLayer(secondChar));
+}

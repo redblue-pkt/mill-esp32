@@ -20,7 +20,7 @@
 #include "esphome/core/log.h"
 #include "cms79ft738.h"
 
-const char *const log_tag = "cms79ft738"; // prefix for log messages
+const char *const log_tag = "cms79ft738.common"; // prefix for log messages
 
 Cms79ft738::Cms79ft738()
 {

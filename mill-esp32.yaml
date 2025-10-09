@@ -3,22 +3,18 @@ globals:
     type: float
     restore_value: yes
     initial_value: '5'
-
   - id: current_value
     type: float
     restore_value: no
     initial_value: '5'
-
   - id: status_value
     type: bool
     restore_value: yes
     initial_value: 'true'
-
   - id: wifi_value
     type: bool
     restore_value: no
     initial_value: 'true'
-
   - id: heating_value
     type: bool
     restore_value: no
@@ -28,7 +24,7 @@ globals:
   - id: heater_power
     type: int
     restore_value: yes
-    initial_value: '250'
+    initial_value: '400'
   - id: energy_total
     type: float
     restore_value: yes
@@ -42,10 +38,6 @@ globals:
     restore_value: true
     initial_value: '0.0'
   - id: energy_month
-    type: float
-    restore_value: true
-    initial_value: '0.0'
-  - id: energy_year
     type: float
     restore_value: true
     initial_value: '0.0'
@@ -65,8 +57,9 @@ globals:
 substitutions:
   # Project Specific Substitutions
   sub_text_devicename:            "Mill Esp32"
-  sub_esphome_name:               "mill_esp32"
-  sub_device_location:            "esp32"
+  sub_esphome_name:               "MILL_ESP32"
+  sub_esphome_device_name:        "mill-esp32"
+  sub_device_location:            "mill esp32"
   # sub_wifi_manual_ip_static_ip:   !secret esp_fridge_monitor_ip
   sub_ntp_server:                 "no.pool.ntp.org"
   sub_timezone:                   "Oslo"
@@ -76,7 +69,7 @@ substitutions:
   # sub_wifi_manual_ip_gateway:     !secret esp_ip_gateway
   # sub_wifi_manual_ip_dns1:        !secret esp_ip_dns
   # Fast connect is only available when a single SSID is used.  True or False
-  sub_wifi_fast_connect:          "true"                  
+  sub_wifi_fast_connect:          "true"
   sub_wifi_domain:                !secret esp_ip_domain
   sub_wifi_ap_password:           !secret esp_ap_psk
   sub_web_server_port:            !secret esp_http_server_port
@@ -86,30 +79,14 @@ substitutions:
   sub_ota_password:               !secret esp_ota_pass
 
 esphome:
-  name:                           ${sub_esphome_name}
+  name:                           ${sub_esphome_device_name}
   platformio_options:
     board_build.flash_mode: qio
-  
-  # After the device is all up and running, run this script to set 
-  # options or conditions that are needed.  This is not always necessary
-  # https://esphome.io/components/esphome.html#on-boot
-  #on_boot:                          
-  #  priority:                     -100
-  #  then:
-  #    script.execute:             on_boot
-
-  # Mill header
-  includes:
-    - cms79ft738.cpp
-    - cms79ft738.h
-    - cms79ft738_led.cpp
-    - cms79ft738_led.h
-    - cms79ft738_key.cpp
-    - cms79ft738_key.h
-    - cms79ft738_mill.h
 
 esp32:
   board: nodemcu-32s
+  flash_size: 4MB
+  cpu_frequency: 240MHZ
   framework:
     type: arduino
 
@@ -153,16 +130,6 @@ time:
               id(energy_month) = 0.0;
               ESP_LOGI("reset", "Monthly energy reset performed.");
 
-      - seconds: 0
-        minutes: 0
-        hours: 0
-        days_of_month: 1
-        months: 1
-        then:
-          - lambda: |-
-              id(energy_year) = 0.0;
-              ESP_LOGI("reset", "Yearly energy reset performed.");
-
 uart:
   id: uart_bus
   tx_pin: GPIO1
@@ -178,22 +145,31 @@ i2c:
   sda: GPIO19
   scl: GPIO18
   scan: true
-  frequency: 200kHz
+  frequency: 100kHz
+
+external_components:
+  - source:
+      type: local
+      path: ./components
 
 climate:
-- platform: custom
-  id: ${sub_esphome_name}_climate
-  lambda: |-
-    auto cms79ft738 = new Cms79ft738LedMill();
-    App.register_component(cms79ft738);
-    return {cms79ft738};
-  climates:
-    - name: ${sub_esphome_name}
-      id: ${sub_esphome_name}_heater
-      visual:
-         min_temperature: 5 °C
-         max_temperature: 35 °C
-         temperature_step: 1.0 °C
+  - platform: mill-wifi-gen3
+    name: ${sub_esphome_name}
+    id: ${sub_esphome_name}_heater
+    sensor: ${sub_esphome_name}_temperature_ntc
+    heat_switch: global_mill_heat
+    status_text: heater_status
+    target_temperature_sensor: wanted_temperature
+    current_temperature_sensor: current_temperature
+    target_temperature_global: target_value
+    current_temperature_global: current_value
+    status_value_global: status_value
+    reset_button: global_reset_device
+    factory_button: global_factory_settings
+    visual:
+      min_temperature: 5 °C
+      max_temperature: 35 °C
+      temperature_step: 1 °C
 
 wifi:
   networks:
@@ -220,7 +196,6 @@ web_server:
   port: ${sub_web_server_port}
   log: true
   version: 3
-  ota: true
   local: true
 
 captive_portal:
@@ -328,14 +303,20 @@ sensor:
     unit_of_measurement: °C
     accuracy_decimals: 1
     device_class: temperature
+    #update_interval: never
+    #lambda: |-
+    #  return id(target_value);
 
     # Include mill heater current temperature in the device attributes
   - platform: template
     name: ${sub_text_devicename} Current Temperature
-    id: now_temperature
+    id: current_temperature
     unit_of_measurement: °C
     accuracy_decimals: 1
     device_class: temperature
+    #update_interval: never
+    #lambda: |-
+    #  return id(current_value);
 
   - platform: template
     name: ${sub_text_devicename} Energy Current
@@ -363,7 +344,7 @@ sensor:
 
       if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
         float local_heater_power = id(heater_power);
-        float power_increment = local_heater_power / 1000 * 0.000277778;  // Przeliczanie mocy na kWh
+        float power_increment = local_heater_power / 1000 * 0.000277778;
         id(energy_today) += power_increment;
       }
         
@@ -379,6 +360,7 @@ sensor:
     accuracy_decimals: 3
     lambda: |-
       return id(energy_yesterday);
+    update_interval: 60s
 
   - platform: template
     name: "${sub_text_devicename} Energy Monthly"
@@ -396,25 +378,7 @@ sensor:
       }
         
       return id(energy_month);
-    update_interval: 10s
-
-  - platform: template
-    name: "${sub_text_devicename} Energy Yearly"
-    id: ${sub_esphome_name}_energy_yearly
-    unit_of_measurement: kWh
-    device_class: energy
-    icon: mdi:calendar-range
-    accuracy_decimals: 3
-    lambda: |-
-
-      if (id(${sub_esphome_name}_heater).action == CLIMATE_ACTION_HEATING) {
-        float local_heater_power = id(heater_power);
-        float power_increment = local_heater_power / 1000 * 0.000277778;
-        id(energy_year) += power_increment;
-      }
-
-      return id(energy_year);
-    update_interval: 10s
+    update_interval: 60s
 
   - platform: template
     name: ${sub_text_devicename} Energy Total
@@ -432,13 +396,13 @@ sensor:
       }
         
       return id(energy_total);
-    update_interval: 10s
+    update_interval: 60s
 
   - platform: adc
     pin: GPIO34
     name: ${sub_text_devicename} NTC Voltage
     id: ${sub_esphome_name}_adc_sensor
-    update_interval: 10s
+    update_interval: 30s
     attenuation: 12db
     #filters:
     #  - multiply: 3.3
@@ -468,24 +432,21 @@ sensor:
       then:
         - lambda: |-
             id(current_value) = id(${sub_esphome_name}_temperature_ntc).state;
-            auto cms_device = new Cms79ft738LedMill();
-            cms_device->blit();
-            //cms_device->set_current_temperature(id(temperature_ntc).state);
-            //cms_device->set_target_temperature(id(target_value));
+            id(${sub_esphome_name}_heater).blit();
 
-  - platform: adc
-    pin: GPIO35
-    name: "Voltage AC"
-    update_interval: 5s
-    accuracy_decimals: 0
-    filters:
-      - multiply: 220  
-      - lambda: |-
-          if (x >= 210 && x <= 270) {
-            return x;  
-          } else {
-            return {};  
-          }
+  #- platform: adc
+  #  pin: GPIO35
+  #  name: "Voltage AC"
+  #  update_interval: 1s
+  #  accuracy_decimals: 3
+    #filters:
+    #  - multiply: 220  
+    #  - lambda: |-
+    #      if (x >= 210 && x <= 270) {
+    #        return x;  
+    #      } else {
+    #        return {};  
+    #      }
 
 
 switch:
@@ -537,6 +498,7 @@ text_sensor:
     id: ${sub_esphome_name}_uptime
     icon: mdi:clock-start
     update_interval: 3600s  
+
   - platform: template
     name: ${sub_text_devicename} Heater Status
     id: heater_status
@@ -550,7 +512,7 @@ binary_sensor:
 number:
   - platform: template
     name: ${sub_text_devicename} Heater Power
-    id: ${sub_esphome_name}_heater_power
+    id: ${sub_esphome_name}_climate_power
     optimistic: true
     min_value: 250
     max_value: 2800
@@ -564,4 +526,4 @@ number:
             int value = x;
             id(heater_power) = value;
             ESP_LOGD("Heater Power", "Heater power set to %d", value);
-            id(${sub_esphome_name}_heater_power).publish_state(value);
+            id(${sub_esphome_name}_climate_power).publish_state(value);

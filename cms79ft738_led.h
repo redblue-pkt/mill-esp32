@@ -130,6 +130,8 @@ public:
 	void setIconHeating(bool heating);
 	void setIconPower(bool power);
 	void setIconWifiGreen(bool wifi_green);
+	void setIconWifiRed(bool wifi_red);
+	void setIconWifiYellow(bool wifi_yellow);
 	void setIconX(bool x);
 	bool getIconSettings();
 	bool getIconMinus();
@@ -138,15 +140,18 @@ public:
 	bool getIconPower();
 	bool getIconWifiGreen();
 	bool getIconWifiRed();
+	bool getIconWifiYellow();
 	void setLines(char lines);
 	char setBrightnessTranslationLayer(int brightness);
 	void setBrightness(int brightness);
 	char setDigitTranslationLayer(int digit);
-	void setTemperature(float temperature);
+	void setTemperature(float temperature, bool fahrenheit);
 	char setCharTranslationLayer(char character);
 	void setOffDisplay();
 	void setFDisplay();
 	void setCDisplay();
+	void setAPisplay();
+
 private:
 	bool heating_icon;
 	bool power_icon;
