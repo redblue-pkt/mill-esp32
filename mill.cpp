@@ -103,7 +103,7 @@ void MillClimate::loop() {
 		if (this->target_temperature > MAX_TEMPERATURE)
 			this->target_temperature = MAX_TEMPERATURE;
 
-		ESP_LOGD(TAG, "new data recived c %f t %f", this->current_temperature, this->target_temperature);
+		ESP_LOGV(TAG, "new data recived c %f t %f", this->current_temperature, this->target_temperature);
 
 		if (this->target_temp_pub_)
 			Sensor_publish(this->target_temp_pub_, this->target_temperature);
@@ -156,8 +156,6 @@ void MillClimate::update() {
 
 		wifi_enabled = load_wifi_state();
 
-		//ESP_LOGD(TAG, "wifi state %s", wifi_enabled ? "true" : "false");
-
 		if (button == KEY_WIFI && wifi_enabled) {
 			wifi::global_wifi_component->disable();
 			save_wifi_state(false);
@@ -173,13 +171,13 @@ void MillClimate::update() {
 			}
 			if (current_time - last_settings_press_time > 3000) {
 				cms79ft738_led.setIconSettings(false);
-				//id(global_factory_settings).press();
+
 				if (this->factory_btn_)
 					this->factory_btn_->press();
 				delay(500);
 				cms79ft738_led.setIconSettings(true);
 				settings_button_was_pressed = false;
-				//id(global_reset_device).press();
+
 				if (this->reset_btn_)
 					this->reset_btn_->press();
 			}
@@ -244,45 +242,63 @@ void MillClimate::update() {
 	}
 
 #ifdef EXTENDED_WIFI_LOGIC
-auto mode = WiFi.getMode();
-auto st   = WiFi.status();
+	auto mode = WiFi.getMode();
+	auto st   = WiFi.status();
 
-uint8_t color = 0;
+	uint8_t color = 0;
 
-if (mode == WIFI_MODE_NULL) {
-  color = 0;
-} else if (mode == WIFI_MODE_AP) {
-  int n = WiFi.softAPgetStationNum();
-  color = (n > 0) ? 1 : 2;
-} else if (mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) {
-  switch (st) {
-    case WL_CONNECTED:        color = 1; break;
-    case WL_IDLE_STATUS:      color = 2; break;
-    case WL_CONNECTION_LOST:  color = 2; break;
-    case WL_NO_SSID_AVAIL:    color = 3; break;
-    case WL_CONNECT_FAILED:   color = 3; break;
-    case WL_DISCONNECTED:
-    default:                  color = 3; break;
-  }
+	if (mode == WIFI_MODE_NULL) {
+		color = 0;
+	} else if (mode == WIFI_MODE_AP) {
+		int n = WiFi.softAPgetStationNum();
+		color = (n > 0) ? 1 : 2;
+	} else if (mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) {
+		switch (st) {
+			case WL_CONNECTED:
+				color = 1;
+				break;
+			case WL_IDLE_STATUS:
+				color = 2;
+				break;
+			case WL_CONNECTION_LOST:
+				color = 2;
+				break;
+			case WL_NO_SSID_AVAIL:
+				color = 3;
+				break;
+			case WL_CONNECT_FAILED:
+				color = 3;
+				break;
+			case WL_DISCONNECTED:
+			default:
+				color = 3;
+				break;
+		}
+		if (mode == WIFI_MODE_APSTA && color != 1) {
+			int n = WiFi.softAPgetStationNum();
+			if (n > 0 && color == 3)
+				color = 2;
+		}
+	}
 
-  if (mode == WIFI_MODE_APSTA && color != 1) {
-    int n = WiFi.softAPgetStationNum();
-    if (n > 0 && color == 3) color = 2;
-  }
-}
+	if (color != wifi_color) {
+		if (wifi_color == 1)
+			cms79ft738_led.setIconWifiGreen(false);
+		else if (wifi_color == 2)
+			cms79ft738_led.setIconWifiYellow(false);
+		else if (wifi_color == 3)
+			cms79ft738_led.setIconWifiRed(false);
 
-if (color != wifi_color) {
-  if      (wifi_color == 1) cms79ft738_led.setIconWifiGreen(false);
-  else if (wifi_color == 2) cms79ft738_led.setIconWifiYellow(false);
-  else if (wifi_color == 3) cms79ft738_led.setIconWifiRed(false);
+		if (color == 1)
+			cms79ft738_led.setIconWifiGreen(true);
+		else if (color == 2)
+			cms79ft738_led.setIconWifiYellow(true);
+		else if (color == 3)
+			cms79ft738_led.setIconWifiRed(true);
 
-  if      (color == 1) cms79ft738_led.setIconWifiGreen(true);
-  else if (color == 2) cms79ft738_led.setIconWifiYellow(true);
-  else if (color == 3) cms79ft738_led.setIconWifiRed(true);
-
-  wifi_color = color;
-  update_lcd = true;
-}
+		wifi_color = color;
+		update_lcd = true;
+	}
 #else
 	if (WiFi.isConnected()) {
 		cms79ft738_led.setIconWifiGreen(true);
